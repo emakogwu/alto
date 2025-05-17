@@ -1,0 +1,54 @@
+.headerContainer{
+  background-color: #e4e7e7;
+  border-radius: .6rem;
+  padding: 1rem;
+  .logoAndUserSection{
+    display: flex;
+    justify-content: space-between;
+    align-content: center;
+    align-items: center;
+
+    .logo{
+      display:flex;
+      align-content: center;
+      align-items: center;
+      gap: .7rem
+    }
+
+    .user{
+      display: flex;
+      justify-content: space-between;
+      align-content: center;
+      align-items: center;
+      gap: 1rem;
+
+      & .profile {
+        background-color: #0B4A73;
+        color: #ffffff;
+        padding: 0.5rem;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+      }
+    }
+  }
+
+  .welcomeSection{
+    display: flex;
+    justify-content: center;
+    h1{
+      font-weight: normal;
+    }
+    .alto{
+      color: #0B4A73;
+      font-weight: bold;
+    }
+  }
+
+
+
+}
