@@ -5,6 +5,8 @@
   .addressContainer{
     width: 340px;
     border: .2rem solid #f1f1f1;
+    max-height: 600px;
+    overflow-y: scroll;
 
     .header{
       background-color: #0B4A73;

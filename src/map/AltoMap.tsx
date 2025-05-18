@@ -1,10 +1,8 @@
-import { Fragment, useRef, useState } from "react";
-import {
-    GoogleMap,
-    Marker,
-    useJsApiLoader,
-} from "@react-google-maps/api";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import AltoMapStyles from "./AltoMap.module.scss";
+import { Location } from "./Location";
+import { altoLocations, type AltoLocation } from "./Locations";
 
 const containerStyle = {
     width: "100%",
@@ -16,20 +14,6 @@ const center = {
     lng: -98.5795,
 };
 
-const altoLocations = [
-    { name: "Los Angeles", state: "california", lat: 34.018876, lng: -118.376485 },
-    { name: "Irvine", state: "california", lat: 33.661377, lng: -117.706822 },
-    { name: "San Diego", state: "california", lat: 32.8216, lng: -117.1475 },
-    { name: "Las Vegas", state: "nevada", lat: 36.0845, lng: -115.1521 },
-    { name: "Bellevue", state: "washington", lat: 47.6297, lng: -122.1661 },
-    { name: "Denver", state: "colorado", lat: 39.73, lng: -104.987 },
-    { name: "New York City", state: "new york", lat: 40.751, lng: -73.9787 },
-    { name: "Plainview", state: "new york", lat: 40.7856, lng: -73.4502 },
-    { name: "Bellaire", state: "texas", lat: 29.7056, lng: -95.4603 },
-    { name: "Lewisville", state: "texas", lat: 32.9923, lng: -96.9785 },
-    { name: "Austin", state: "texas", lat: 30.19, lng: -97.748 },
-];
-
 const highlightedStates = new Set([
     "california",
     "nevada",
@@ -39,16 +23,14 @@ const highlightedStates = new Set([
     "texas",
 ]);
 
-const usaBounds = {
-    north: 49.38,
-    south: 24.52,
-    west: -125.0,
-    east: -66.95,
-};
-
 const mapOptions: google.maps.MapOptions = {
     restriction: {
-        latLngBounds: usaBounds,
+        latLngBounds: {
+            north: 49.38,
+            south: 24.52,
+            west: -125.0,
+            east: -66.95,
+        },
         strictBounds: true,
     },
     minZoom: 4,
@@ -57,26 +39,30 @@ const mapOptions: google.maps.MapOptions = {
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: false,
+    mapId: "a777a6d9e910712c717fc1da",
 };
 
 export function AltoMap() {
     const mapRef = useRef<google.maps.Map | null>(null);
+    const markerRefs = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
     const [selectedState, setSelectedState] = useState<string | null>(null);
-    const [altoIcon, setAltoIcon] = useState<google.maps.Icon | null>(null);
 
     const { isLoaded } = useJsApiLoader({
         googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
+        libraries: ["marker"],
     });
+
+    const resetView = () => {
+        if (!mapRef.current) return;
+        const map = mapRef.current;
+        const bounds = new google.maps.LatLngBounds();
+        altoLocations.forEach((loc) => bounds.extend(new google.maps.LatLng(loc.lat, loc.lng)));
+        map.fitBounds(bounds);
+        setSelectedState(null);
+    };
 
     const handleMapLoad = (map: google.maps.Map) => {
         mapRef.current = map;
-
-        const icon: google.maps.Icon = {
-            url: "/alto-icon.png",
-            scaledSize: new google.maps.Size(20, 20),
-            anchor: new google.maps.Point(20, 20),
-        };
-        setAltoIcon(icon);
 
         map.data.loadGeoJson("/us-states.json", null, () => {
             map.data.setStyle((feature) => {
@@ -88,26 +74,40 @@ export function AltoMap() {
         });
 
         map.data.addListener("click", (event: google.maps.Data.MouseEvent) => {
-            const feature = event.feature;
-            const stateName = (feature.getProperty("NAME") as string)?.toLowerCase();
+            const stateName = (event.feature.getProperty("NAME") as string)?.toLowerCase();
+            if (!highlightedStates.has(stateName)) return;
+
             setSelectedState(stateName);
+            const locations = altoLocations.filter((l) => l.state === stateName);
+            if (locations.length) {
+                map.setCenter({ lat: locations[0].lat, lng: locations[0].lng });
+                map.setZoom(7);
+            }
+        });
 
-            map.data.forEach((f) => {
-                const name = (f.getProperty("NAME") as string)?.toLowerCase();
-                map.data.overrideStyle(f, {
-                    fillColor: highlightedStates.has(name) ? "#b4d46a" : "#e0e0e0",
-                    strokeColor: highlightedStates.has(name) ? "#0B4A73" : "#999",
-                    strokeWeight: 1,
-                });
+        altoLocations.forEach((location) => {
+            const icon = document.createElement("img");
+            icon.src = "/alto-icon.png";
+            icon.style.width = "30px";
+            icon.style.height = "30px";
+
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+                position: { lat: location.lat, lng: location.lng },
+                content: icon,
+                title: `Alto - ${location.name}`,
+                map: map,
             });
 
-            map.data.overrideStyle(feature, {
-                fillColor: "#74814b",
-                strokeColor: "#0B4A73",
-                strokeWeight: 2,
-            });
+            markerRefs.current.push(marker);
         });
     };
+
+    useEffect(() => {
+        return () => {
+            markerRefs.current.forEach((marker) => marker.map = null);
+            markerRefs.current = [];
+        };
+    }, [isLoaded]);
 
     if (!isLoaded) return <div>Loading map...</div>;
 
@@ -117,30 +117,41 @@ export function AltoMap() {
                 <GoogleMap
                     mapContainerStyle={containerStyle}
                     center={center}
-                    zoom={2}
+                    zoom={4}
                     onLoad={handleMapLoad}
                     options={mapOptions}
-                >
-                    {altoIcon &&
-                        altoLocations.map((location) => (
-                            <Marker
-                                key={location.name}
-                                position={{ lat: location.lat, lng: location.lng }}
-                                icon={altoIcon}
-                                title={`Alto - ${location.name}`}
-                            />
-                        ))}
-                </GoogleMap>
+                />
                 <div className={AltoMapStyles.addressContainer}>
                     <div className={AltoMapStyles.header}>
                         <h4>United States</h4>
+                        {selectedState && (<button
+                            onClick={resetView}
+                            style={{
+                                marginTop: "0.5rem",
+                                padding: "0.4rem 0.8rem",
+                                fontSize: "0.9rem",
+                                border: "1px solid #ccc",
+                                backgroundColor: "white",
+                                cursor: "pointer",
+                            }}
+                        >
+                        All locations</button>)}
                     </div>
                     <div className={AltoMapStyles.addresses}>
-                        Lorem ipsum dolor sit amet, consectetur adipisicing elit. Animi cum cumque doloremque enim est eum expedita impedit magni numquam, odio omnis recusandae rem sit, sunt tempora velit veniam. Minima, voluptas?
+                        <Location
+                            selectedState={selectedState}
+                            onSelect={(location: AltoLocation) => {
+                                setSelectedState(location.state);
+                                const map = mapRef.current;
+                                if (map) {
+                                    map.setCenter({lat: location.lat, lng: location.lng});
+                                    map.setZoom(7);
+                                }
+                            }}
+                        />
                     </div>
                 </div>
             </div>
-
         </Fragment>
     );
 }
